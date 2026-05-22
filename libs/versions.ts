@@ -532,12 +532,22 @@ export async function launchGame(basepath: string, game: string) {
         ),
     );
     cmd.push(`-Dminecraft.client.jar=${basepath}/versions/${game}/${game}.jar`);
+    let javaMajorVersion = 0;
+    try {
+        const jre = gconfig.java || config.get("java");
+        const verOut = execSync(`"${jre}" --version 2>&1`).toString();
+        const match = verOut.match(/(\d+)/);
+        if (match) javaMajorVersion = parseInt(match[1]);
+    } catch {}
     const parseJvmArgs = (args: any) => {
         for (const param of args) {
             if (typeof param === "string") {
                 let tmp = param;
                 for (const [key, value] of Object.entries(argparams)) {
                     tmp = tmp.replaceAll(`$\{${key}\}`, value);
+                }
+                if (tmp.startsWith("--sun-misc-unsafe-memory-access") && javaMajorVersion < 23) {
+                    continue;
                 }
                 cmd.push(tmp);
             } else {
@@ -552,6 +562,9 @@ export async function launchGame(basepath: string, game: string) {
                         : `${param.value}`;
                     for (const [key, value] of Object.entries(argparams)) {
                         tmp = tmp.replaceAll(`$\{${key}\}`, value);
+                    }
+                    if (tmp.startsWith("--sun-misc-unsafe-memory-access") && javaMajorVersion < 23) {
+                        continue;
                     }
                     cmd.push(tmp);
                 }
