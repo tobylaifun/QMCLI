@@ -1,4 +1,3 @@
-// launcher-specific version configs
 import yaml from "js-yaml";
 import nodePath from "node:path";
 import fs from "node:fs";

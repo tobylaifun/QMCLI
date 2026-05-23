@@ -1,29 +1,38 @@
-import { m } from "./mirrors";
+import { m } from "./mirrors.ts";
 import nodePath from "node:path";
-import AdmZip from "adm-zip";
 import fs from "node:fs";
 import { deepmerge } from "deepmerge-ts";
-import lzma from "lzma";
-import { fetchLibraries } from "./versions";
-import { DownloadQueue } from "./downloader";
-import { t } from "../translations/translate";
+import { fetchLibraries } from "./versions.ts";
+import { DownloadQueue } from "./downloader.ts";
+import { t } from "../translations/translate.ts";
 import chalk from "chalk";
 import { confirm, select, Separator } from "@inquirer/prompts";
-import { checkRules, parseLibNameToPath } from "./utils";
-// mod loader installers (eg forge,neoforge,fabric,quilt)
+import { MinecraftLibrary, parseLibNameToPath } from "./utils.ts";
 
-export function addPatch(verJson: any, patch: any,meta:any) {
-    // 先deepmerge，然后加到patches里
-    verJson = deepmerge(verJson, patch);
-    verJson.patches = verJson.patches || [];
-    verJson.patches.push({...patch,...meta});
-    return verJson;
+interface PatchEntry {
+    id: string;
+    version?: string;
+    mainClass?: string;
+    arguments?: { game?: string[] };
 }
 
-export function removePatch(verJson: any, patch: any) {
-    // 提取patches中的id=game，把其余patches重新复制到新的patches上（去除patch）
-    let oriVerJson = JSON.parse(JSON.stringify(verJson.patches.find((p: any) => p.id == "game")));
-    oriVerJson.patches = JSON.parse(JSON.stringify(verJson.patches.filter((p: any) => p != patch)));
+interface VersionJson {
+    patches?: PatchEntry[];
+    mainClass?: string;
+    libraries?: Array<Record<string, unknown>>;
+    [key: string]: unknown;
+}
+
+export function addPatch(verJson: VersionJson, patch: Record<string, unknown>, meta: Record<string, unknown>) {
+    const merged = deepmerge(verJson, patch) as VersionJson;
+    merged.patches = merged.patches || [];
+    merged.patches.push({ ...patch, ...meta } as unknown as PatchEntry);
+    return merged;
+}
+
+export function removePatch(verJson: VersionJson, patch: PatchEntry) {
+    const oriVerJson = JSON.parse(JSON.stringify(verJson.patches?.find((p) => p.id == "game"))) as VersionJson;
+    oriVerJson.patches = JSON.parse(JSON.stringify(verJson.patches?.filter((p) => p != patch)));
     return oriVerJson;
 }
 
@@ -34,141 +43,20 @@ export interface InstallerEntry {
 }
 
 export class BaseInstaller {
-    static async getInstallersFromMcVersion(
-        mcVersion: string,
+    static getInstallersFromMcVersion(
+        _mcVersion: string,
     ): Promise<InstallerEntry[] | null> {
-        return null;
+        return Promise.resolve(null);
     }
-    static async install(
-        entry: InstallerEntry,
-        basepath: string,
-        game: string,
-    ) {}
-}
-/* no forge at the moment, it's soooo haaaard
-export class ForgeInstaller extends BaseInstaller {
-    static async getInstallersFromMcVersion(
-        mcVersion: string,
-    ): Promise<InstallerEntry[] | null> {
-        const apiMcVersions = m(
-            "https://bmclapi2.bangbang93.com/forge/minecraft",
-        );
-        const mcVersions: string[] = await (await fetch(apiMcVersions)).json();
-        if (!mcVersions.includes(mcVersion)) {
-            return null;
-        }
-        const apiInstallerVersions = m(
-            `https://bmclapi2.bangbang93.com/forge/minecraft/${mcVersion}`,
-        );
-        const installerVersions: any[] =
-            await (await fetch(apiInstallerVersions)).json();
-        return installerVersions.map((v) => {
-            return {
-                url: m(
-                    `https://files.minecraftforge.net/maven/net/minecraftforge/forge/${mcVersion}-${v.version}/forge-${mcVersion}-${v.version}-installer.jar`,
-                ),
-                version: v.version,
-            };
-        });
-    }
-    static async install(
-        installerPath: string,
-        basepath: string,
-        game: string,
-    ) {
-        const gamePath = nodePath.join(basepath, "versions", game);
-        const tmpPath = nodePath.join(gamePath, "tmp-forge");
-        fs.mkdirSync(tmpPath, { recursive: true });
-        const zip = new AdmZip(installerPath);
-        zip.extractAllTo(tmpPath, true);
-
-        // verjson
-        fs.copyFileSync(
-            nodePath.join(gamePath, `${game}.json`),
-            nodePath.join(gamePath, `${game}-original.json`),
-        );
-        const verJson = JSON.parse(
-            fs.readFileSync(nodePath.join(gamePath, `${game}.json`), {
-                encoding: "utf-8",
-            }),
-        ) as any;
-        const forgeVerJson = JSON.parse(
-            fs.readFileSync(nodePath.join(tmpPath, "version.json"), {
-                encoding: "utf-8",
-            }),
-        ) as any;
-        delete forgeVerJson.id;
-        const merged = deepmerge(verJson, forgeVerJson);
-        // fs.writeFileSync(nodePath.join(gamePath,`${game}.json`),JSON.stringify(merged,null,4),{encoding:"utf-8"});
-        // fetch libraries in version.json
-        const { tasks, totalSize } = await fetchLibraries(
-            forgeVerJson,
-            basepath,
-            game,
-        );
-        const dl = new DownloadQueue(16, { totalSize });
-        for (const task of tasks) {
-            dl.addTask(task);
-        }
-        await dl.wait();
-        const forgeInstallProfileJson=JSON.parse(fs.readFileSync(nodePath.join(tmpPath,"install_profile.json"),{encoding:"utf-8"}));
-        {
-            const { tasks, totalSize } = await fetchLibraries(
-                forgeInstallProfileJson,
-                basepath,
-                game,
-            );
-            const dl = new DownloadQueue(16, { totalSize });
-            for (const task of tasks) {
-                dl.addTask(task);
-            }
-            await dl.wait();
-        }
-
-        // client
-        // fs.copyFileSync(nodePath.join(gamePath,`${game}.jar`),nodePath.join(gamePath,`${game}-original.jar`));
-        // // tmp/data/client.lzma extract->${game}.jar
-        // const clientLzma=fs.readFileSync(nodePath.join(tmpPath,"data","client.lzma"));
-        // const client=lzma.decompress(clientLzma);
-        // fs.writeFileSync(nodePath.join(gamePath,`${game}.jar`),Buffer.from(client));
-
-        fs.rmSync(tmpPath, { recursive: true });
-        console.log("installed forge");
+    static install(
+        _entry: InstallerEntry,
+        _basepath: string,
+        _game: string,
+    ): Promise<void> {
+        return Promise.resolve();
     }
 }
 
-// (async () => {
-//     const { url } =
-//         (await ForgeInstaller.getInstallersFromMcVersion("1.17.1"))![0];
-//     // console.log(url)
-//     // fs.writeFileSync("forge.jar",Buffer.from(await (await fetch(url)).arrayBuffer()));
-//     await ForgeInstaller.install(
-//         "forge-patched.jar",
-//         "C:\\Users\\Toby\\.minecraft",
-//         "1.17.1",
-//     );
-// })();
-
-const ajson=JSON.parse(
-    fs.readFileSync("C:\\Users\\Toby\\.minecraft\\versions\\1.17.1\\1.17.1-original.json",{encoding:"utf-8"})
-);
-const bjson=JSON.parse(
-    fs.readFileSync("C:\\Users\\Toby\\.minecraft\\versions\\1.17.1\\1.17.1.json",{encoding:"utf-8"})
-);
-delete bjson.id;
-delete bjson.inheritsFrom;
-delete bjson.logging;
-const x=(bjson.arguments.jvm as any[]).findIndex((v:any)=>typeof v==="string"&&v.includes("-DignoreList="));
-if(x!==-1){
-    bjson.arguments.jvm[x]=bjson.arguments.jvm[x]+","+"1.17.1";
-}
-const merged=deepmerge(ajson,bjson);
-fs.writeFileSync("C:\\Users\\Toby\\.minecraft\\versions\\1.17.1\\1.17.1-merged.json",JSON.stringify(merged,null,4),{encoding:"utf-8"});
-
-// download mappings to "MOJMAPS": {
-//            "client": "[net.minecraft:client:1.20-20230608.053357:mappings@txt]",
-// \libraries\net\minecraft\client\1.20-20230608.053357\client-1.20-20230608.053357-mappings.txt
-*/
 class FabricInstaller extends BaseInstaller {
     static loader = "fabric";
     static fabricapi = "https://meta.fabricmc.net/v2";
@@ -219,8 +107,7 @@ class FabricInstaller extends BaseInstaller {
             fs.readFileSync(`${basepath}/versions/${game}/${game}.json`, {
                 encoding: "utf-8",
             }),
-        ) as any;
-        // parse the json and convert the libraries to normal
+        ) as VersionJson;
         for (let i = 0; i < profileJson.libraries.length; i++) {
             const path = parseLibNameToPath(
                 profileJson.libraries[i].name,
@@ -238,9 +125,7 @@ class FabricInstaller extends BaseInstaller {
             };
         }
         const merged = deepmerge(originalVerJson, profileJson);
-        // patches original verJson
         originalVerJson.patches = originalVerJson.patches || [];
-        // originalVerJson.patches.push();
         originalVerJson = addPatch(originalVerJson, profileJson, {
             id: this.loader,
             priority: 30000,
@@ -261,12 +146,12 @@ class FabricInstaller extends BaseInstaller {
             { encoding: "utf-8" },
         );
         const { tasks, totalSize } = await fetchLibraries(
-            merged,
+            merged as { libraries?: MinecraftLibrary[] },
             basepath,
             game,
         );
         if (tasks.length != 0) {
-            let dl = new DownloadQueue(16, { totalSize });
+            const dl = new DownloadQueue(16, { totalSize });
             for (const task of tasks) {
                 dl.addTask(task);
             }
@@ -275,38 +160,39 @@ class FabricInstaller extends BaseInstaller {
     }
 }
 class QuiltInstaller extends FabricInstaller {
-    static loader = "quilt";
-    static fabricapi = "https://meta.quiltmc.org/v3";
+    static override loader = "quilt";
+    static override fabricapi = "https://meta.quiltmc.org/v3";
 }
+
 type LoaderTypes = "fabric" | "forge" | "quilt" | "neoforged";
 const installers: Record<LoaderTypes, typeof BaseInstaller> = {
     fabric: FabricInstaller,
-    forge: BaseInstaller, // TODO
+    forge: BaseInstaller,
     quilt: QuiltInstaller,
-    neoforged: BaseInstaller, // TODO
+    neoforged: BaseInstaller,
 };
 
-export function detectModLoader(verJson: any): LoaderTypes | "unknown" | false {
-    // verJson = mergeVerJsonPatches(verJson);
-    for (const patch of verJson.patches||[]) {
-        if (patch.mainClass.includes("fabricmc")) {
+export function detectModLoader(verJson: VersionJson): LoaderTypes | "unknown" | false {
+    for (const patch of verJson.patches || []) {
+        if (patch.mainClass?.includes("fabricmc")) {
             return "fabric";
-        } else if (patch.mainClass.includes("quiltmc")) {
+        } else if (patch.mainClass?.includes("quiltmc")) {
             return "quilt";
-        } else if (patch.arguments.game.includes("forgeclient")) {
+        } else if (patch.arguments?.game?.includes("forgeclient")) {
             return "forge";
-        } else if (patch.arguments.game.includes("neoforgeclient")) {
+        } else if (patch.arguments?.game?.includes("neoforgeclient")) {
             return "neoforged";
         }
     }
-    let patch = verJson;
-    if (patch.mainClass.includes("fabricmc")) {
+    const mc = verJson.mainClass ?? "";
+    const verArgs = (verJson as { arguments?: { game?: string[] } }).arguments;
+    if (mc.includes("fabricmc")) {
         return "fabric";
-    } else if (patch.mainClass.includes("quiltmc")) {
+    } else if (mc.includes("quiltmc")) {
         return "quilt";
-    } else if (patch.arguments.game.includes("forgeclient")) {
+    } else if (verArgs?.game?.includes("forgeclient")) {
         return "forge";
-    } else if (patch.arguments.game.includes("neoforgeclient")) {
+    } else if (verArgs?.game?.includes("neoforgeclient")) {
         return "neoforged";
     }
     return false;
@@ -322,16 +208,8 @@ export async function autoInstallPrompt(
         fs.readFileSync(nodePath.join(gamePath, game + ".json"), {
             encoding: "utf-8",
         }),
-    ) as any;
+    ) as VersionJson;
     const detected = detectModLoader(verJson);
-    // if (detected) {
-    //     console.log(
-    //         chalk.red(
-    //             t("auto_install_prompt_already_installed_mod_loader", detected),
-    //         ),
-    //     );
-    //     return;
-    // }
     const loader = await select<LoaderTypes>({
         message: t("auto_install_prompt_select_mod_loader"),
         choices: [
@@ -349,12 +227,12 @@ export async function autoInstallPrompt(
             {
                 name: `${detected == "forge" ? "✅ " : ""}Forge ❌todo`,
                 value: "forge",
-                disabled: detected !== false && detected != "forge" || true, // TODO
+                disabled: detected !== false && detected != "forge" || true,
             },
             {
                 name: `${detected == "neoforged" ? "✅ " : ""}NeoForge ❌todo`,
                 value: "neoforged",
-                disabled: detected !== false && detected != "neoforged" || true, // TODO
+                disabled: detected !== false && detected != "neoforged" || true,
             },
         ],
     });
@@ -400,7 +278,7 @@ export async function autoInstallPrompt(
                     chalk.yellow(t("auto_install_info_err_no_patches")),
                 );
             } else {
-                const patch = verJson.patches.find((p: any) =>
+                const patch = verJson.patches?.find((p) =>
                     p.id == detected
                 );
                 if (!patch) {
@@ -426,10 +304,9 @@ export async function autoInstallPrompt(
                 default: false,
             });
             if (confirm_) {
-                // rm patches named
-                const patchIndex = verJson.patches.findIndex((p: any) =>
+                const patchIndex = verJson.patches?.findIndex((p) =>
                     p.id == detected
-                );
+                ) ?? -1;
                 if (patchIndex == -1) {
                     console.log(
                         chalk.red(
@@ -443,8 +320,7 @@ export async function autoInstallPrompt(
                     return;
                 }
 
-                // verJson.patches.splice(patchIndex, 1);
-                verJson = removePatch(verJson, verJson.patches[patchIndex]);
+                verJson = removePatch(verJson, verJson.patches![patchIndex]);
                 fs.writeFileSync(
                     nodePath.join(gamePath, game + ".json"),
                     JSON.stringify(verJson, null, 4),

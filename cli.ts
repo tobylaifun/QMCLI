@@ -1,13 +1,13 @@
 import { Command } from "commander";
-import { editor,confirm, input, rawlist, search, select } from "@inquirer/prompts";
+import { editor, confirm, input, search, select } from "@inquirer/prompts";
 import yaml from "js-yaml"
-import { config } from "./libs/config";
-import * as versionsMod from "./libs/versions";
-import packageJson from "./package.json";
+import { config } from "./libs/config.ts";
+import * as versionsMod from "./libs/versions.ts";
+import packageJson from "./package.json" with { type: "json" };
 import chalk from "chalk";
-import * as fs from "fs";
-import { expandTilde, isValidFileName } from "./libs/utils";
-import path from "path";
+import * as fs from "node:fs";
+import { expandTilde, isValidFileName } from "./libs/utils.ts";
+import path from "node:path";
 import {
     addUser,
     checkIsValid32UnsignedUUID,
@@ -15,13 +15,13 @@ import {
     getUsers,
     removeUser,
     User,
-} from "./libs/users";
-import { t, TransType,installTrans,languages } from "./translations/translate";
-import { LauncherGameConfig, loadConfig, saveConfig } from "./libs/versionsConfig";
-import { autoInstallPrompt, detectModLoader } from "./libs/modLoaderInstaller";
+} from "./libs/users.ts";
+import { t, TransType,installTrans,languages } from "./translations/translate.ts";
+import { LauncherGameConfig, loadConfig, saveConfig } from "./libs/versionsConfig.ts";
+import { autoInstallPrompt, detectModLoader } from "./libs/modLoaderInstaller.ts";
 
 // load language
-const activedTrans: TransType = languages[config.get("lang")];
+const activedTrans: TransType = languages[config.get<string>("lang")];
 installTrans(activedTrans);
 
 const program = new Command();
@@ -72,7 +72,7 @@ versionsCommand.command("add")
         });
         const ver = await search({
             message: t("cmd_versions_add_select_version_prompt"),
-            async source(term: string | undefined) {
+            source(term: string | undefined) {
                 if (!term) return choices;
                 return choices.filter((c) => {
                     return c.name?.toLowerCase().includes(term.toLowerCase());
@@ -141,7 +141,7 @@ versionsCommand.command("list")
                 };
             }),
         });
-        let games = await versionsMod.listGames(expandTilde(pathSel));
+        const games = await versionsMod.listGames(expandTilde(pathSel));
         if (games.length === 0) {
             console.log(chalk.red(t("error_no_game_installed")));
             return;
@@ -210,7 +210,7 @@ versionsCommand.command("list")
                     "utf-8",
                 ),
             );
-            await autoInstallPrompt(expandTilde(pathSel),game,versionsMod.getVersionFromVerJson(verJson));
+            await autoInstallPrompt(expandTilde(pathSel),game,versionsMod.getVersionFromVerJson(verJson) ?? game);
         }else if (action === "delete") {
             const confirm_ = await confirm({
                 message: t("cmd_versions_action_delete_confirm", game),
@@ -323,7 +323,7 @@ pathsCommand.command("list")
         });
         if (action === "info") {
             console.log(chalk.blue(t("cmd_settings_paths_list_info_path", pathSel)));
-            let games = await versionsMod.listGames(expandTilde(pathSel));
+            const games = await versionsMod.listGames(expandTilde(pathSel));
             if (games.length === 0) {
                 console.log(chalk.red(t("error_no_game_installed")));
                 return;

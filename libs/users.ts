@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { config } from "./config";
+import { config } from "./config.ts";
 
 export interface User{
     name:string,

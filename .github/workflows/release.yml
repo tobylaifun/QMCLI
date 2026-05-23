@@ -1,4 +1,4 @@
-# a workflow runs on release,setup bun,bun install,and then run bun bun-build.ts,then upload dist/build/* to release assets
+# a workflow runs on release, sets up deno, then runs deno-build.ts, then uploads dist/build/* to release assets
 name: Release on tags push
 on:
   push:
@@ -12,12 +12,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
         with:
-          bun-version: latest
-      - run: bun install
-      - run: bun bun-build.ts exe ${{ github.ref }}
+          deno-version: v2.x
+      - run: deno install --entrypoint cli.ts
+      - run: deno run -A deno-build.ts exe ${{ github.ref }}
       - name: Create Release
         uses: ncipollo/release-action@v1.15.0
         with:
