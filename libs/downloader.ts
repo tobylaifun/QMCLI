@@ -44,15 +44,17 @@ export class DownloadQueue {
     private speedUpdateInterval: ReturnType<typeof setInterval>;
     public extra?: ExtraData;
     private downloadedSize = 0;
-    private startTime = 0;
     public defaultRetries = 20;
+    /** Sliding-window speed samples (time, cumulative bytes). Pruned to last 5s. */
+    private speedSamples: { time: number; bytes: number }[] = [];
+    private static readonly SPEED_WINDOW_MS = 5000;
 
     constructor(maxParallel: number, extra?: ExtraData) {
         this.extra = extra;
         this.maxParallel = maxParallel;
         this.queue = [];
         this.activeDownloads = new Map();
-        this.startTime = Date.now();
+        this.speedSamples.push({ time: Date.now(), bytes: 0 });
         this.progressBar = new cliProgress.SingleBar({
             format(options: cliProgress.Options, _params: cliProgress.Params, payload: ProgressPayload) {
                 const bar = options.barCompleteChar!.repeat(payload.finishedPercent * 20)
@@ -103,24 +105,41 @@ export class DownloadQueue {
         return `${speed.toFixed(2)} ${units[unitIndex]}`;
     }
 
+    /** Rolling 5-second window: (newest_bytes - oldest_bytes) / window_seconds */
+    private calcSpeed(): number {
+        const now = Date.now();
+        const cutoff = now - DownloadQueue.SPEED_WINDOW_MS;
+        // Prune samples outside the window
+        this.speedSamples = this.speedSamples.filter(s => s.time >= cutoff);
+        this.speedSamples.push({ time: now, bytes: this.downloadedSize });
+        if (this.speedSamples.length < 2) return 0;
+        const newest = this.speedSamples[this.speedSamples.length - 1];
+        const oldest = this.speedSamples[0];
+        const elapsedSec = (newest.time - oldest.time) / 1000;
+        return elapsedSec > 0 ? (newest.bytes - oldest.bytes) / elapsedSec : 0;
+    }
+
     private updateProgress(finished: boolean = false): void {
         const currentFiles = Array.from(this.activeDownloads.keys());
-        const totalSpeed = this.downloadedSize / ((Date.now() - this.startTime) / 1000);
+        const speed = this.calcSpeed();
         this.progressBar.update(this.completedTasks, {
             title: finished ? (chalk.green("Done")) : (currentFiles.length > 0
                 ? `Downloading: (${currentFiles.length} active)`
                 : 'Preparing...'),
-            speed: this.formatSpeed(totalSpeed),
+            speed: this.formatSpeed(speed),
             completed: this.completedTasks,
             totalTasks: this.totalTasks,
             finishedPercent: this.extra?.totalSize
                 ? (this.downloadedSize / this.extra.totalSize)
                 : (this.completedTasks / this.totalTasks),
-            calcEta: this.extra?.totalSize ? (this.extra.totalSize - this.downloadedSize) / totalSpeed : 0,
+            calcEta: this.extra?.totalSize && speed > 0
+                ? (this.extra.totalSize - this.downloadedSize) / speed
+                : 0,
         });
     }
 
     private async downloadFile(task: DownloadTask): Promise<void> {
+        let downloadedThisAttempt = 0;
         try {
             const response = await fetch(task.url);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -130,24 +149,21 @@ export class DownloadQueue {
             const reader = response.body?.getReader();
             if (!reader) throw new Error('No readable stream');
 
-            let downloaded = 0;
-            const startTime = Date.now();
-
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
                 writer.write(value);
-                downloaded += value.length;
+                downloadedThisAttempt += value.length;
                 this.downloadedSize += value.length;
-
-                const elapsed = (Date.now() - startTime) / 1000 + 0.01;
-                this.activeDownloads.set(task.filename, elapsed > 0 ? downloaded / elapsed : 0);
             }
 
             writer.end();
             this.completedTasks++;
         } catch (error) {
+            // Retracting partial bytes from the failed attempt so retries don't double-count
+            this.downloadedSize -= downloadedThisAttempt;
+
             if ((task.retries || this.defaultRetries) > 0) {
                 console.error(`♻️❌ ${task.filename}(retrying): ${(error as Error).message}`);
                 await new Promise(resolve => setTimeout(resolve, 3000));
@@ -163,7 +179,6 @@ export class DownloadQueue {
     }
 
     public async wait(): Promise<void> {
-        this.startTime = Date.now();
         while (this.activeDownloads.size > 0 || this.queue.length > 0) {
             await new Promise(resolve => setTimeout(resolve, 100));
         }
