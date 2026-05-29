@@ -12,7 +12,7 @@ import { select } from "@inquirer/prompts";
 import { getUsers, User } from "./users.ts";
 import { t } from "../translations/translate.ts";
 import packageJson from "../package.json" with { type: "json" };
-import { LauncherGameConfig, loadConfig } from "./versionsConfig.ts";
+import { LauncherGameConfig, loadConfig } from "./version_config.ts";
 import {
     arch,
     checkRules,

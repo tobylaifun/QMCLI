@@ -9,6 +9,7 @@ import chalk from "chalk";
 import { confirm, select, Separator } from "@inquirer/prompts";
 import { parseLibNameToPath } from "./utils.ts";
 import { PatchEntry, VersionInfo } from "./types.ts";
+import AdmZip from "adm-zip";
 
 export function addPatch(verJson: VersionInfo, patch: Record<string, unknown>, meta: Record<string, unknown>) {
     const merged = deepmerge(verJson, patch) as VersionInfo;
@@ -151,10 +152,142 @@ class QuiltInstaller extends FabricInstaller {
     static override fabricapi = "https://meta.quiltmc.org/v3";
 }
 
+class ForgeInstaller extends BaseInstaller {
+    static loader = "forge";
+    static forgeMinecraftApi = "https://bmclapi2.bangbang93.com/forge/minecraft";
+    static forgeMaven = "https://maven.minecraftforge.net";
+
+    static async getInstallersFromMcVersion(
+        mcVersion: string,
+    ): Promise<InstallerEntry[] | null> {
+        const api = m(`${this.forgeMinecraftApi}/${mcVersion}`);
+        const resp = await fetch(api);
+        if (!resp.ok) return null;
+        const versions = await resp.json() as {
+            version: string;
+            files?: { category: string; format: string }[];
+        }[];
+        if (!Array.isArray(versions) || versions.length === 0) return null;
+        return versions
+            .filter((v) =>
+                v.files?.some((f) => f.category === "installer" && f.format === "jar")
+            )
+            .map((v) => ({
+                version: v.version,
+                mcversion: mcVersion,
+            }));
+    }
+
+    static async install(
+        entry: InstallerEntry,
+        basepath: string,
+        game: string,
+    ): Promise<void> {
+        const installerUrl = m(
+            `${this.forgeMaven}/net/minecraftforge/forge/${entry.mcversion}-${entry.version}` +
+                `/forge-${entry.mcversion}-${entry.version}-installer.jar`,
+        );
+        const installerPath = nodePath.join(
+            basepath,
+            "versions",
+            game,
+            `forge-${entry.mcversion}-${entry.version}-installer.jar`,
+        );
+        const resp = await fetch(installerUrl);
+        if (!resp.ok) {
+            throw new Error(`forge installer download failed: ${resp.status}`);
+        }
+        const buf = new Uint8Array(await resp.arrayBuffer());
+        fs.writeFileSync(installerPath, buf);
+
+        const zip = new AdmZip(installerPath);
+        const versionEntry = zip.getEntry("version.json");
+        if (!versionEntry) {
+            throw new Error("forge installer missing version.json");
+        }
+        const versionJson = JSON.parse(zip.readAsText(versionEntry)) as VersionInfo;
+
+        for (const lib of versionJson.libraries ?? []) {
+            if (lib.downloads?.artifact) {
+                const art = lib.downloads.artifact;
+                if ((!art.path || nodePath.extname(art.path) === "") && lib.name) {
+                    art.path = parseLibNameToPath(lib.name);
+                }
+                if (art.path && (!art.url || art.url.trim() === "")) {
+                    const base = lib.url ?? this.forgeMaven;
+                    art.url = m(`${base}/${art.path}`);
+                } else if (art.url) {
+                    art.url = m(art.url);
+                }
+                if (lib.downloads.classifiers) {
+                    for (const cls of Object.values(lib.downloads.classifiers)) {
+                        if (cls.url) {
+                            cls.url = m(cls.url);
+                        } else if (cls.path) {
+                            cls.url = m(`${this.forgeMaven}/${cls.path}`);
+                        }
+                    }
+                }
+                continue;
+            }
+            if (lib.url && !lib.downloads) {
+                const path = parseLibNameToPath(lib.name);
+                lib.downloads = {
+                    artifact: {
+                        path,
+                        url: m(lib.url + path),
+                    },
+                };
+            }
+        }
+
+        let originalVerJson = JSON.parse(
+            fs.readFileSync(`${basepath}/versions/${game}/${game}.json`, {
+                encoding: "utf-8",
+            }),
+        ) as VersionInfo;
+
+        const merged = deepmerge(originalVerJson, versionJson);
+        originalVerJson.patches = originalVerJson.patches || [];
+        originalVerJson = addPatch(originalVerJson, versionJson, {
+            id: this.loader,
+            priority: 30000,
+            version: entry.version,
+        });
+
+        if (
+            !fs.existsSync(`${basepath}/versions/${game}/${game}-original.json`)
+        ) {
+            fs.copyFileSync(
+                `${basepath}/versions/${game}/${game}.json`,
+                `${basepath}/versions/${game}/${game}-original.json`,
+            );
+        }
+        fs.writeFileSync(
+            `${basepath}/versions/${game}/${game}.json`,
+            JSON.stringify(originalVerJson, null, 4),
+            { encoding: "utf-8" },
+        );
+
+        const { tasks, totalSize } = await fetchLibraries(
+            merged as VersionInfo,
+            basepath,
+            game,
+        );
+        if (tasks.length != 0) {
+            const dl = new DownloadQueue(16, { totalSize });
+            for (const task of tasks) {
+                dl.addTask(task);
+            }
+            await dl.wait();
+        }
+    }
+}
+
 type LoaderTypes = "fabric" | "forge" | "quilt" | "neoforged";
 const installers: Record<LoaderTypes, typeof BaseInstaller> = {
     fabric: FabricInstaller,
-    forge: BaseInstaller,
+    forge: ForgeInstaller,
     quilt: QuiltInstaller,
     neoforged: BaseInstaller,
 };
@@ -212,9 +345,9 @@ export async function autoInstallPrompt(
             },
             new Separator(),
             {
-                name: `${detected == "forge" ? "✅ " : ""}Forge ❌todo`,
+                name: `${detected == "forge" ? "✅ " : ""}Forge`,
                 value: "forge",
-                disabled: detected !== false && detected != "forge" || true,
+                disabled: detected !== false && detected != "forge",
             },
             {
                 name: `${detected == "neoforged" ? "✅ " : ""}NeoForge ❌todo`,

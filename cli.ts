@@ -18,8 +18,8 @@ import {
     User,
 } from "./libs/users.ts";
 import { t, TransType,installTrans,languages } from "./translations/translate.ts";
-import { LauncherGameConfig, loadConfig, saveConfig } from "./libs/versionsConfig.ts";
-import { autoInstallPrompt, detectModLoader } from "./libs/modLoaderInstaller.ts";
+import { LauncherGameConfig, loadConfig, saveConfig } from "./libs/version_config.ts";
+import { autoInstallPrompt, detectModLoader } from "./libs/mod_loader.ts";
 
 const activedTrans: TransType = languages[config.get<string>("lang")];
 installTrans(activedTrans);
