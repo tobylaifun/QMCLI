@@ -214,6 +214,9 @@ class ForgeInstaller extends BaseInstaller {
                     art.path = parseLibNameToPath(lib.name);
                 }
                 if (art.path && (!art.url || art.url.trim() === "")) {
+                    if (lib.name?.includes(":client") || lib.name?.includes(":server")) {
+                        continue;
+                    }
                     const base = lib.url ?? this.forgeMaven;
                     art.url = m(`${base}/${art.path}`);
                 } else if (art.url) {
@@ -287,7 +290,7 @@ class ForgeInstaller extends BaseInstaller {
 type LoaderTypes = "fabric" | "forge" | "quilt" | "neoforged";
 const installers: Record<LoaderTypes, typeof BaseInstaller> = {
     fabric: FabricInstaller,
-    forge: ForgeInstaller,
+    forge: BaseInstaller,
     quilt: QuiltInstaller,
     neoforged: BaseInstaller,
 };
@@ -345,9 +348,9 @@ export async function autoInstallPrompt(
             },
             new Separator(),
             {
-                name: `${detected == "forge" ? "✅ " : ""}Forge`,
+                name: `${detected == "forge" ? "✅ " : ""}Forge ❌todo`,
                 value: "forge",
-                disabled: detected !== false && detected != "forge",
+                disabled: detected !== false && detected != "forge" || true,
             },
             {
                 name: `${detected == "neoforged" ? "✅ " : ""}NeoForge ❌todo`,
