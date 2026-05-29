@@ -5,6 +5,7 @@ A Quick Minecraft Launcher CLI (Work In Progress)
 
 > [!WARNING]
 > This launcher might not be compatible with the official launcher, HMCL, PCL,etc.
+> And note that this project has used LLMs to generate and refactor some code, so there might be some bugs and security issues. Please use it with caution.
 
 ## Installation
 ```bash

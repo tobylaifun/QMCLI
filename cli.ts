@@ -3,6 +3,7 @@ import { editor, confirm, input, search, select } from "@inquirer/prompts";
 import yaml from "js-yaml"
 import { config } from "./libs/config.ts";
 import * as versionsMod from "./libs/versions.ts";
+import { launchGame, listGames, deleteGame, getVersionFromVerJson } from "./libs/launcher.ts";
 import packageJson from "./package.json" with { type: "json" };
 import chalk from "chalk";
 import * as fs from "node:fs";
@@ -20,7 +21,6 @@ import { t, TransType,installTrans,languages } from "./translations/translate.ts
 import { LauncherGameConfig, loadConfig, saveConfig } from "./libs/versionsConfig.ts";
 import { autoInstallPrompt, detectModLoader } from "./libs/modLoaderInstaller.ts";
 
-// load language
 const activedTrans: TransType = languages[config.get<string>("lang")];
 installTrans(activedTrans);
 
@@ -37,7 +37,18 @@ type Choice<Value> = {
     disabled?: boolean | string;
 };
 
-// Versions Command
+async function selectMcPath(): Promise<string> {
+    return await select({
+        message: t("select_mc_path_prompt"),
+        choices: (config.get("paths") as string[]).map((p) => ({
+            value: p,
+            name: p,
+            description: t("select_mc_path_desc"),
+            short: p,
+        })),
+    });
+}
+
 const versionsCommand = new Command();
 versionsCommand.name("versions");
 versionsCommand.description(t("cmd_versions_desc"));
@@ -79,17 +90,7 @@ versionsCommand.command("add")
                 });
             },
         });
-        const pathSel = await select({
-            message: t("select_mc_path_prompt"),
-            choices: (config.get("paths") as string[]).map((p) => {
-                return {
-                    value: p,
-                    name: p,
-                    description: t("select_mc_path_desc"),
-                    short: p,
-                };
-            }),
-        });
+        const pathSel = await selectMcPath();
         const gameName = await input({
             message: t("cmd_versions_enter_game_name_prompt"),
             default: ver.id,
@@ -110,7 +111,6 @@ versionsCommand.command("add")
                 return true;
             },
         });
-        // summary
         console.log(chalk.green(t("summary_info")));
         console.log(chalk.green(t("summary_game_name", gameName)));
         console.log(chalk.green(t("summary_version", ver.id)));
@@ -130,18 +130,8 @@ versionsCommand.command("add")
 versionsCommand.command("list")
     .description(t("cmd_versions_list_desc"))
     .action(async () => {
-        const pathSel = await select({
-            message: t("select_mc_path_prompt"),
-            choices: (config.get("paths") as string[]).map((p) => {
-                return {
-                    value: p,
-                    name: p,
-                    description: t("select_mc_path_desc"),
-                    short: p,
-                };
-            }),
-        });
-        const games = await versionsMod.listGames(expandTilde(pathSel));
+        const pathSel = await selectMcPath();
+        const games = await listGames(expandTilde(pathSel));
         if (games.length === 0) {
             console.log(chalk.red(t("error_no_game_installed")));
             return;
@@ -159,7 +149,7 @@ versionsCommand.command("list")
                 return {
                     value: g,
                     name: g+(detected?` | (✅ ${detected})`:""),
-                    description: t("cmd_versions_list_game_desc", g, versionsMod.getVersionFromVerJson(verjson))+(detected?` (✅ ${detected})`:""),
+                    description: t("cmd_versions_list_game_desc", g, getVersionFromVerJson(verjson))+(detected?` (✅ ${detected})`:""),
                     short: g,
                 };
             }),
@@ -190,10 +180,8 @@ versionsCommand.command("list")
         });
         if (action === "launch") {
             console.log(chalk.green(t("operation_starting")));
-            await versionsMod.launchGame(expandTilde(pathSel), game);
-            // console.log(chalk.green(t("operation_completed")));
+            await launchGame(expandTilde(pathSel), game);
         } else if (action === "edit") {
-            // console.log(chalk.yellow(t("cmd_versions_action_edit_todo")));
             const config=loadConfig(expandTilde(pathSel),game);
             const yamlConfig=yaml.dump(config);
             const res=await editor({
@@ -210,7 +198,7 @@ versionsCommand.command("list")
                     "utf-8",
                 ),
             );
-            await autoInstallPrompt(expandTilde(pathSel),game,versionsMod.getVersionFromVerJson(verJson) ?? game);
+            await autoInstallPrompt(expandTilde(pathSel),game,getVersionFromVerJson(verJson) ?? game);
         }else if (action === "delete") {
             const confirm_ = await confirm({
                 message: t("cmd_versions_action_delete_confirm", game),
@@ -218,7 +206,7 @@ versionsCommand.command("list")
             });
             if (confirm_) {
                 console.log(chalk.green(t("operation_starting")));
-                versionsMod.deleteGame(expandTilde(pathSel), game);
+                deleteGame(expandTilde(pathSel), game);
                 console.log(chalk.green(t("operation_completed")));
             } else {
                 console.log(chalk.red(t("operation_canceled")));
@@ -228,7 +216,6 @@ versionsCommand.command("list")
 
 program.addCommand(versionsCommand);
 
-// Settings Command
 const settingsCommand = new Command();
 settingsCommand.name("settings").description(t("cmd_settings_desc"));
 settingsCommand.command("mirror")
@@ -323,7 +310,7 @@ pathsCommand.command("list")
         });
         if (action === "info") {
             console.log(chalk.blue(t("cmd_settings_paths_list_info_path", pathSel)));
-            const games = await versionsMod.listGames(expandTilde(pathSel));
+            const games = await listGames(expandTilde(pathSel));
             if (games.length === 0) {
                 console.log(chalk.red(t("error_no_game_installed")));
                 return;
@@ -337,7 +324,7 @@ pathsCommand.command("list")
                     ),
                 );
                 console.log(
-                    chalk.blue(t("cmd_settings_paths_list_info_game_entry", g, versionsMod.getVersionFromVerJson(verjson))),
+                    chalk.blue(t("cmd_settings_paths_list_info_game_entry", g, getVersionFromVerJson(verjson))),
                 );
             }
         } else if (action === "remove") {
@@ -355,7 +342,6 @@ pathsCommand.command("list")
         }
     });
 
-// language
 settingsCommand.command("lang").description(t("cmd_settings_lang_desc"))
     .action(async () => {
         const lang = await select({
@@ -391,7 +377,6 @@ settingsCommand.command("java").description(t("cmd_settings_java_desc"))
 
 program.addCommand(settingsCommand);
 
-// Users Command
 const usersCommand = new Command();
 usersCommand.name("users").description(t("cmd_users_desc"));
 usersCommand.command("add")

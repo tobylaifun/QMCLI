@@ -7,31 +7,18 @@ import { DownloadQueue } from "./downloader.ts";
 import { t } from "../translations/translate.ts";
 import chalk from "chalk";
 import { confirm, select, Separator } from "@inquirer/prompts";
-import { MinecraftLibrary, parseLibNameToPath } from "./utils.ts";
+import { parseLibNameToPath } from "./utils.ts";
+import { PatchEntry, VersionInfo } from "./types.ts";
 
-interface PatchEntry {
-    id: string;
-    version?: string;
-    mainClass?: string;
-    arguments?: { game?: string[] };
-}
-
-interface VersionJson {
-    patches?: PatchEntry[];
-    mainClass?: string;
-    libraries?: Array<Record<string, unknown>>;
-    [key: string]: unknown;
-}
-
-export function addPatch(verJson: VersionJson, patch: Record<string, unknown>, meta: Record<string, unknown>) {
-    const merged = deepmerge(verJson, patch) as VersionJson;
+export function addPatch(verJson: VersionInfo, patch: Record<string, unknown>, meta: Record<string, unknown>) {
+    const merged = deepmerge(verJson, patch) as VersionInfo;
     merged.patches = merged.patches || [];
     merged.patches.push({ ...patch, ...meta } as unknown as PatchEntry);
     return merged;
 }
 
-export function removePatch(verJson: VersionJson, patch: PatchEntry) {
-    const oriVerJson = JSON.parse(JSON.stringify(verJson.patches?.find((p) => p.id == "game"))) as VersionJson;
+export function removePatch(verJson: VersionInfo, patch: PatchEntry) {
+    const oriVerJson = JSON.parse(JSON.stringify(verJson.patches?.find((p) => p.id == "game"))) as VersionInfo;
     oriVerJson.patches = JSON.parse(JSON.stringify(verJson.patches?.filter((p) => p != patch)));
     return oriVerJson;
 }
@@ -107,7 +94,7 @@ class FabricInstaller extends BaseInstaller {
             fs.readFileSync(`${basepath}/versions/${game}/${game}.json`, {
                 encoding: "utf-8",
             }),
-        ) as VersionJson;
+        ) as VersionInfo;
         for (let i = 0; i < profileJson.libraries.length; i++) {
             const path = parseLibNameToPath(
                 profileJson.libraries[i].name,
@@ -146,7 +133,7 @@ class FabricInstaller extends BaseInstaller {
             { encoding: "utf-8" },
         );
         const { tasks, totalSize } = await fetchLibraries(
-            merged as { libraries?: MinecraftLibrary[] },
+            merged as VersionInfo,
             basepath,
             game,
         );
@@ -172,7 +159,7 @@ const installers: Record<LoaderTypes, typeof BaseInstaller> = {
     neoforged: BaseInstaller,
 };
 
-export function detectModLoader(verJson: VersionJson): LoaderTypes | "unknown" | false {
+export function detectModLoader(verJson: VersionInfo): LoaderTypes | "unknown" | false {
     for (const patch of verJson.patches || []) {
         if (patch.mainClass?.includes("fabricmc")) {
             return "fabric";
@@ -208,7 +195,7 @@ export async function autoInstallPrompt(
         fs.readFileSync(nodePath.join(gamePath, game + ".json"), {
             encoding: "utf-8",
         }),
-    ) as VersionJson;
+    ) as VersionInfo;
     const detected = detectModLoader(verJson);
     const loader = await select<LoaderTypes>({
         message: t("auto_install_prompt_select_mod_loader"),

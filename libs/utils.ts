@@ -1,36 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import process from "node:process";
-
-export interface RuleOsInfo {
-    name?: string;
-    version?: string;
-    arch?: string;
-}
-
-export interface MinecraftRule {
-    action?: string;
-    os?: RuleOsInfo;
-    features?: Record<string, boolean>;
-    value?: string | string[];
-}
-
-export interface ArtifactInfo {
-    path?: string;
-    url?: string;
-    size?: number;
-    sha1?: string;
-}
-
-export interface MinecraftLibrary {
-    name: string;
-    url?: string;
-    downloads?: {
-        artifact?: ArtifactInfo;
-        classifiers?: Record<string, ArtifactInfo>;
-    };
-    rules?: MinecraftRule[];
-}
+import { MinecraftLibrary, MinecraftRule, RuleOsInfo } from "./types.ts";
 
 export function isValidFileName(filename: string): boolean {
     if (!filename || filename.length === 0 || filename.length > 255) {
@@ -64,20 +35,19 @@ export function expandTilde(filePath: string) {
 export function getOs(): string {
     if (os.platform() === "win32") {
         return "windows";
-    } else if (os.platform() === "darwin") {
-        return "osx";
-    } else {
-        return "linux";
     }
+    if (os.platform() === "darwin") {
+        return "osx";
+    }
+    return "linux";
 }
 
 export function getArchSuffix(): string {
     const res = arch();
     if (res === "x64") {
         return "";
-    } else {
-        return "-" + res;
     }
+    return "-" + res;
 }
 
 export function checkRules(rules: MinecraftRule[], features: { os?: RuleOsInfo; has_custom_resolution?: boolean; [key: string]: unknown } = {}): boolean {
@@ -142,4 +112,13 @@ export function parseLibNameToPath(name: string) {
         "/" + splitted[2] + "/" +
         splitted.slice(1, splitted.length).join("-") + ".jar";
     return path;
+}
+
+export async function sha1Hex(data: Uint8Array): Promise<string> {
+    // Copy to avoid SharedArrayBuffer type issues with crypto.subtle
+    const buf = new Uint8Array(data.byteLength);
+    buf.set(data);
+    const hash = await crypto.subtle.digest("SHA-1", buf);
+    const hashArray = new Uint8Array(hash);
+    return Array.from(hashArray, (b) => b.toString(16).padStart(2, "0")).join("");
 }
