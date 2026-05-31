@@ -128,7 +128,10 @@ export async function fetchLibraries(
                 const { path: clsPath, url: clsUrl, size: clsSize, sha1: clsSha1 } = cls;
                 const filename = `${basepath}/libraries/${clsPath ?? ""}`;
                 let push = true;
-                if (fs.existsSync(filename)) {
+                if (!clsSha1 && fs.existsSync(filename)) {
+                    const stat = fs.statSync(filename);
+                    push = stat.size === 0;
+                } else if (fs.existsSync(filename)) {
                     const content: Uint8Array = new Uint8Array(fs.readFileSync(filename));
                     const newsha1 = await sha1Hex(content);
                     if (newsha1 == clsSha1) {

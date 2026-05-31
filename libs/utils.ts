@@ -93,7 +93,7 @@ export function rmDupLibs(libraries: MinecraftLibrary[]) {
     const libs: MinecraftLibrary[] = [];
     const lib_names: string[] = [];
     libraries.forEach((x) => {
-        const libname = x.name.split(":").slice(0, 2).join(":");
+        const libname = x.name;
         if (x.name.includes("natives")) {
             libs.push(x);
         } else if (!lib_names.includes(libname)) {
