@@ -18,6 +18,7 @@ import {
     User,
 } from "./libs/users.ts";
 import { t, TransType,installTrans,languages } from "./translations/translate.ts";
+import { m } from "./libs/mirrors.ts";
 import { LauncherGameConfig, loadConfig, saveConfig } from "./libs/version_config.ts";
 import { autoInstallPrompt, detectModLoader } from "./libs/mod_loader.ts";
 
@@ -114,6 +115,13 @@ versionsCommand.command("add")
         console.log(chalk.green(t("summary_info")));
         console.log(chalk.green(t("summary_game_name", gameName)));
         console.log(chalk.green(t("summary_version", ver.id)));
+        try {
+            const verResp = await fetch(m(ver.url));
+            const verJson = await verResp.json() as { javaVersion?: { majorVersion: number } };
+            if (verJson.javaVersion?.majorVersion) {
+                console.log(chalk.green(t("summary_java_version", verJson.javaVersion.majorVersion)));
+            }
+        } catch { /* ignore fetch errors */ }
         console.log(chalk.green(t("summary_minecraft_path", pathSel)));
         console.log(chalk.green(t("cmd_versions_add_tips_autoinstall")))
         const yes = await confirm({
@@ -146,10 +154,12 @@ versionsCommand.command("list")
                     ),
                 );
                 const detected=detectModLoader(verjson);
+                const javaVer = verjson.javaVersion?.majorVersion;
+                const javaHint = javaVer ? ` | ${t("summary_java_version", javaVer)}` : "";
                 return {
                     value: g,
-                    name: g+(detected?` | (✅ ${detected})`:""),
-                    description: t("cmd_versions_list_game_desc", g, getVersionFromVerJson(verjson))+(detected?` (✅ ${detected})`:""),
+                    name: g+(detected?` | (✅ ${detected})`:"")+javaHint,
+                    description: t("cmd_versions_list_game_desc", g, getVersionFromVerJson(verjson))+(detected?` (✅ ${detected})`:"")+javaHint,
                     short: g,
                 };
             }),

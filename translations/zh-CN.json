@@ -112,6 +112,7 @@
     "summary_info": "概要：",
     "summary_game_name": "游戏名称：$1",
     "summary_version": "版本：$1",
+    "summary_java_version": "需要 Java $1",
     "summary_minecraft_path": "Minecraft 路径：$1",
     "operation_starting": "操作正在开始...",
     "operation_completed": "操作已完成。",
@@ -138,5 +139,12 @@
     "auto_install_prompt_already_installed_mod_loader": "已安装 $1 模组加载器",
     "auto_install_prompt_select_mod_loader": "选择要安装的模组加载器",
     "auto_install_prompt_select_loader_version":"选择一个版本",
-    "auto_install_prompt_no_loaders_found": "未找到加载器版本，此Minecraft版本可能不受支持。"
+    "auto_install_prompt_no_loaders_found": "未找到加载器版本，此Minecraft版本可能不受支持。",
+    "forge_installing": "正在安装 forge...",
+    "forge_downloading_libraries": "正在下载 forge 依赖库...",
+    "forge_running_processors": "正在运行 forge 处理器 ($1/$2)...",
+    "forge_processor_running": "  正在运行 $1",
+    "forge_processor_done": "  ✓ $1",
+    "forge_verifying_checksums": "正在校验文件...",
+    "forge_install_complete": "forge 安装完成！"
 }

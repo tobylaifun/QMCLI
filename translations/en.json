@@ -123,6 +123,7 @@
     "summary_info": "summary:",
     "summary_game_name": "game name: $1",
     "summary_version": "version: $1",
+    "summary_java_version": "requires Java $1",
     "summary_minecraft_path": "minecraft path: $1",
     "operation_starting": "operation starting...",
     "operation_completed": "operation completed.",
@@ -165,5 +166,13 @@
     "auto_install_version_loader":"version: $1",
     "auto_install_confirm_delete":"are you sure you want to delete this mod loader?",
 
-    "err_failed":"failed!"
+    "err_failed":"failed!",
+
+    "forge_installing":"installing forge...",
+    "forge_downloading_libraries":"downloading forge libraries...",
+    "forge_running_processors":"running forge processors ($1/$2)...",
+    "forge_processor_running":"  running $1",
+    "forge_processor_done":"  ✓ $1",
+    "forge_verifying_checksums":"verifying checksums...",
+    "forge_install_complete":"forge installation complete!"
 }
