@@ -17,52 +17,29 @@ export function detectModLoader(
     }
     return false;
   };
-  const hasForgeLib = (verJson.libraries ?? []).some((lib) =>
-    lib.name?.startsWith("net.minecraftforge:forge:")
-  );
-  const hasNeoForgeLib = (verJson.libraries ?? []).some((lib) =>
-    lib.name?.startsWith("net.neoforged:")
-  );
 
+  // 只从 patches 检测 loader，不检查根级别字段
+  // 根字段可能来自旧代码泄露或数据损坏，不应作为判断依据
   for (const patch of verJson.patches || []) {
     if (patch.mainClass?.includes("fabricmc")) {
       return "fabric";
-    } else if (patch.mainClass?.includes("quiltmc")) {
+    }
+    if (patch.mainClass?.includes("quiltmc")) {
       return "quilt";
-    } else if (
+    }
+    if (
       patch.mainClass?.includes("ForgeBootstrap") ||
       hasLaunchTarget(patch.arguments?.game, "forge_client") ||
-      hasLaunchTarget(patch.arguments?.game, "forgeclient") ||
-      hasForgeLib
+      hasLaunchTarget(patch.arguments?.game, "forgeclient")
     ) {
       return "forge";
-    } else if (
+    }
+    if (
       patch.mainClass?.includes("neoforge") ||
-      hasLaunchTarget(patch.arguments?.game, "neoforgeclient") ||
-      hasNeoForgeLib
+      hasLaunchTarget(patch.arguments?.game, "neoforgeclient")
     ) {
       return "neoforged";
     }
-  }
-  const mc = verJson.mainClass ?? "";
-  const verArgs = (verJson as { arguments?: { game?: string[] } }).arguments;
-  if (mc.includes("fabricmc")) {
-    return "fabric";
-  } else if (mc.includes("quiltmc")) {
-    return "quilt";
-  } else if (
-    mc.includes("ForgeBootstrap") ||
-    hasLaunchTarget(verArgs?.game, "forge_client") ||
-    hasLaunchTarget(verArgs?.game, "forgeclient") ||
-    hasForgeLib
-  ) {
-    return "forge";
-  } else if (
-    mc.includes("neoforge") ||
-    hasLaunchTarget(verArgs?.game, "neoforgeclient") ||
-    hasNeoForgeLib
-  ) {
-    return "neoforged";
   }
   return false;
 }
