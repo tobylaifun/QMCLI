@@ -6,20 +6,41 @@ export function addPatch(
   patch: Record<string, unknown>,
   meta: Record<string, unknown>,
 ) {
-  const merged = deepmerge(verJson, patch) as VersionInfo;
+  // 剥离 loader profile 内部字段，防止它们污染根级别的 version JSON
+  // id/inheritsFrom 会覆盖游戏身份；_comment/version/priority/complianceLevel 是 Forge 内部元数据
+  const {
+    id: _patchId,
+    inheritsFrom: _inheritsFrom,
+    _comment: _comment,
+    version: _version,
+    priority: _priority,
+    complianceLevel: _complianceLevel,
+    ...safePatch
+  } = patch;
+  const merged = deepmerge(verJson, safePatch) as VersionInfo;
   merged.patches = merged.patches || [];
   merged.patches.push({ ...patch, ...meta } as unknown as PatchEntry);
   return merged;
 }
 
 export function removePatch(verJson: VersionInfo, patch: PatchEntry) {
-  const oriVerJson = JSON.parse(
-    JSON.stringify(verJson.patches?.find((p) => p.id == "game")),
-  ) as VersionInfo;
-  oriVerJson.patches = JSON.parse(
-    JSON.stringify(verJson.patches?.filter((p) => p != patch)),
-  );
-  return oriVerJson;
+  const oriPatch = verJson.patches?.find((p) => p.id === "game");
+  if (!oriPatch) return verJson;
+  const savedId = verJson.id;
+  // 用 game patch 的数据覆盖回根字段（还原到原版 MC 状态），但跳过内部元数据字段
+  // 注意：deepmerge-ts 对数组的行为是替换而非拼接，因此 libraries/arguments 会被还原而非累积
+  const {
+    id: _gameId,
+    version: _gameVersion,
+    priority: _gamePriority,
+    ...patchData
+  } = JSON.parse(JSON.stringify(oriPatch));
+  const result = deepmerge(verJson, patchData) as VersionInfo;
+  // id 不能被 game patch 的 "game" 覆盖
+  result.id = savedId;
+  // 只移除指定的 loader patch，保留 game patch（后续安装其他 loader 还需要）
+  result.patches = (verJson.patches?.filter((p) => p !== patch) ?? []) as PatchEntry[];
+  return result;
 }
 
 export interface InstallerEntry {

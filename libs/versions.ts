@@ -57,7 +57,7 @@ export async function fetchAsset(verInfo: VersionInfo, path: string, _gameName?:
             ? `${path}/assets/virtual/legacy/${name}`
             : `${path}/assets/objects/${hash.substring(0, 2)}/${hash}`;
         if (fs.existsSync(file)) {
-            const content: Uint8Array = new Uint8Array(fs.readFileSync(file));
+            const content = fs.readFileSync(file);
             const sha1 = await sha1Hex(content);
             if (sha1 !== assetIndexContent.objects[name].hash) {
                 console.log(
@@ -104,7 +104,7 @@ export async function fetchLibraries(
             if (!artSha1 && fs.existsSync(filename)) {
                 push = false;
             } else if (fs.existsSync(filename)) {
-                const content: Uint8Array = new Uint8Array(fs.readFileSync(filename));
+                const content = fs.readFileSync(filename);
                 const newsha1 = await sha1Hex(content);
                 if (newsha1 == artSha1) {
                     push = false;
@@ -123,16 +123,15 @@ export async function fetchLibraries(
             }
         }
         if (lib.downloads?.classifiers) {
-            for (const [_key, val] of Object.entries(lib.downloads.classifiers)) {
-                const cls = val as ArtifactInfo;
-                const { path: clsPath, url: clsUrl, size: clsSize, sha1: clsSha1 } = cls;
+            for (const [, val] of Object.entries(lib.downloads.classifiers)) {
+                const { path: clsPath, url: clsUrl, size: clsSize, sha1: clsSha1 } = val as ArtifactInfo;
                 const filename = `${basepath}/libraries/${clsPath ?? ""}`;
                 let push = true;
                 if (!clsSha1 && fs.existsSync(filename)) {
                     const stat = fs.statSync(filename);
                     push = stat.size === 0;
                 } else if (fs.existsSync(filename)) {
-                    const content: Uint8Array = new Uint8Array(fs.readFileSync(filename));
+                    const content = fs.readFileSync(filename);
                     const newsha1 = await sha1Hex(content);
                     if (newsha1 == clsSha1) {
                         push = false;
@@ -177,6 +176,8 @@ export async function downloadVersionMetadata(
         version: verInfo.id,
     });
     verInfo.id = gameName;
+    verInfo.jar = gameName;
+    verInfo.root = true;
     fs.writeFileSync(
         `${versionPath}/${gameName}.json`,
         JSON.stringify(verInfo, null, 4),

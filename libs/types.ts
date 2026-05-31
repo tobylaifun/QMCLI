@@ -93,6 +93,8 @@ export interface VersionInfo {
     logging?: LoggingConfig;
     javaVersion?: { component: string; majorVersion: number };
     // QMCLI injected fields
+    jar?: string;
+    root?: boolean;
     qmcli_ver_id?: string;
     patches?: PatchEntry[];
     [key: string]: unknown;
