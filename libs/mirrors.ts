@@ -10,6 +10,8 @@ interface MirrorData{
     forge_download:string,
     forge_download2:string,
     forge_minecraft:string,
+    neoforge_maven:string,
+    neoforge_minecraft:string,
 
     fabric_meta:string,
     fabric_maven:string,
@@ -24,6 +26,8 @@ export const mirrors:Record<string,MirrorData>={
         forge_download:"https://files.minecraftforge.net/maven",
         forge_download2:"https://maven.minecraftforge.net",
         forge_minecraft:"https://bmclapi2.bangbang93.com/forge/minecraft",
+        neoforge_maven:"https://maven.neoforged.net/releases",
+        neoforge_minecraft:"https://maven.neoforged.net/releases/net/neoforged/neoforge",
         fabric_meta:"https://meta.fabricmc.net",
         fabric_maven:"https://maven.fabricmc.net"
     },
@@ -36,6 +40,8 @@ export const mirrors:Record<string,MirrorData>={
         forge_download:"https://bmclapi2.bangbang93.com/maven",
         forge_download2:"https://bmclapi2.bangbang93.com/maven",
         forge_minecraft:"https://bmclapi2.bangbang93.com/forge/minecraft",
+        neoforge_maven:"https://bmclapi2.bangbang93.com/maven",
+        neoforge_minecraft:"https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge",
         fabric_meta:"https://bmclapi2.bangbang93.com/fabric-meta",
         fabric_maven:"https://bmclapi2.bangbang93.com/maven"
     }
