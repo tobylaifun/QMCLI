@@ -55,8 +55,8 @@ Commands:
     - [X] 支持en (English)
     - [X] 支持zh_cn (简体中文)
 - 模组
-    - [ ] forge
-    - [ ] neoforge
+    - [X] forge
+    - [X] neoforge
     - [X] fabric
     - [X] quilt
 

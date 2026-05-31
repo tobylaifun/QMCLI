@@ -57,8 +57,8 @@ many features are still working in progress
     - [X] support en(English)
     - [X] support zh_cn(简体中文)
 - mods
-    - [ ] forge
-    - [ ] neoforge
+    - [X] forge
+    - [X] neoforge
     - [X] fabric
     - [X] quilt
     - maybe more
