@@ -1,9 +1,11 @@
 {
   "name": "@tobylai/qmcli",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "A quick minecraft launcher command-line interface",
   "type": "module",
-  "bin": "./dist/qmcli.cjs",
+  "bin": {
+    "qmcli": "dist/qmcli.cjs"
+  },
   "scripts": {},
   "keywords": [
     "minecraft",
